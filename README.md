@@ -157,3 +157,4 @@ Make sure the backend is running on port `8000` before opening the frontend.
 ### Missing Groq key
 
 If chat fails, check that `GROQ_API_KEY` is set in `backend/.env`.
+# gen_aiproject
