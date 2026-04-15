@@ -1,10 +1,28 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { uploadDocument, getDocuments, deleteDocument, chat, chatStream } from './utils/api';
+import { uploadDocument, getDocuments, deleteDocument, chatStream, clearHistory } from './utils/api';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import EmptyState from './components/EmptyState';
+import ExportPDFButton from './components/ExportPDFButton';
+import QuizGenerator from './components/QuizGenerator';
 
 const uniqueIds = (ids) => [...new Set(ids)];
+const SESSION_STORAGE_KEY = 'docmind_session_id';
+
+function getSessionId() {
+  if (typeof window === 'undefined') {
+    return crypto.randomUUID();
+  }
+
+  const existing = window.localStorage.getItem(SESSION_STORAGE_KEY);
+  if (existing) {
+    return existing;
+  }
+
+  const sessionId = crypto.randomUUID();
+  window.localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+  return sessionId;
+}
 
 export default function App() {
   const [documents, setDocuments] = useState([]);
@@ -12,9 +30,14 @@ export default function App() {
   const [selectedDocs, setSelectedDocs] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [isClearingHistory, setIsClearingHistory] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [sessionId] = useState(() => getSessionId());
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const latestQuizContext = [...messages].reverse().find(
+    (message) => message.role === 'assistant' && message.citations?.length > 0
+  )?.citations || [];
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -94,7 +117,7 @@ export default function App() {
     setIsChatLoading(true);
 
     try {
-      const stream = await chatStream(question, selectedDocs);
+      const stream = await chatStream(question, selectedDocs, sessionId);
       const reader = stream.getReader();
       const decoder = new TextDecoder();
 
@@ -149,6 +172,18 @@ export default function App() {
       ]);
     } finally {
       setIsChatLoading(false);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    setIsClearingHistory(true);
+    try {
+      await clearHistory(sessionId);
+      setMessages([]);
+    } catch (error) {
+      alert(`Clear history failed: ${error.message}`);
+    } finally {
+      setIsClearingHistory(false);
     }
   };
 
@@ -276,6 +311,21 @@ export default function App() {
               )}
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            <ExportPDFButton
+              messages={messages}
+              documents={documents}
+              selectedDocs={selectedDocs}
+              disabled={messages.length === 0 || isChatLoading || isClearingHistory}
+            />
+            <button
+              onClick={handleClearHistory}
+              disabled={isClearingHistory || isChatLoading}
+              className="px-3 py-1.5 text-sm font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isClearingHistory ? 'Clearing...' : 'Clear History'}
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
@@ -283,11 +333,14 @@ export default function App() {
           {messages.length === 0 ? (
             <EmptyState onUpload={() => fileInputRef.current?.click()} />
           ) : (
-            <div className="max-w-4xl mx-auto space-y-4">
+            <div className="space-y-4">
+              <div className="max-w-4xl mx-auto space-y-4">
               {messages.map((msg, idx) => (
                 <ChatMessage key={idx} message={msg} />
               ))}
               <div ref={messagesEndRef} />
+              </div>
+              <QuizGenerator citations={latestQuizContext} />
             </div>
           )}
         </div>

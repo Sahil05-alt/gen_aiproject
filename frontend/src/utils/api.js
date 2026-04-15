@@ -43,7 +43,7 @@ export async function deleteDocument(docId) {
   return response.json();
 }
 
-export async function chat(question, docIds, topK = 5) {
+export async function chat(question, docIds, sessionId, topK = 5) {
   const response = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
     headers: {
@@ -51,6 +51,7 @@ export async function chat(question, docIds, topK = 5) {
     },
     body: JSON.stringify({
       question,
+      session_id: sessionId,
       doc_ids: docIds,
       top_k: topK,
       stream: false,
@@ -65,7 +66,7 @@ export async function chat(question, docIds, topK = 5) {
   return response.json();
 }
 
-export async function chatStream(question, docIds, topK = 5) {
+export async function chatStream(question, docIds, sessionId, topK = 5) {
   const response = await fetch(`${API_BASE}/chat/stream`, {
     method: 'POST',
     headers: {
@@ -73,6 +74,7 @@ export async function chatStream(question, docIds, topK = 5) {
     },
     body: JSON.stringify({
       question,
+      session_id: sessionId,
       doc_ids: docIds,
       top_k: topK,
       stream: true,
@@ -85,6 +87,89 @@ export async function chatStream(question, docIds, topK = 5) {
   }
 
   return response.body;
+}
+
+export async function clearHistory(sessionId) {
+  const response = await fetch(`${API_BASE}/clear-history`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      session_id: sessionId,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to clear history');
+  }
+
+  return response.json();
+}
+
+export async function exportChatPdf(docTitle, messages) {
+  const response = await fetch(`${API_BASE}/export-pdf`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      doc_title: docTitle,
+      messages,
+    }),
+  });
+
+  if (!response.ok) {
+    let errorMessage = 'Failed to export PDF';
+    try {
+      const error = await response.json();
+      errorMessage = error.detail || errorMessage;
+    } catch {
+      // Keep the default message if the error body is not JSON.
+    }
+    throw new Error(errorMessage);
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: getFilenameFromDisposition(response.headers.get('Content-Disposition')),
+  };
+}
+
+export async function generateQuiz(context, numQuestions) {
+  const response = await fetch(`${API_BASE}/generate-quiz`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      context,
+      num_questions: numQuestions,
+    }),
+  });
+
+  if (!response.ok) {
+    let errorMessage = 'Failed to generate quiz';
+    try {
+      const error = await response.json();
+      errorMessage = error.detail || errorMessage;
+    } catch {
+      // Keep the default message if the error body is not JSON.
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+
+function getFilenameFromDisposition(disposition) {
+  if (!disposition) {
+    return 'docmind-chat-export.pdf';
+  }
+
+  const match = disposition.match(/filename="([^"]+)"/);
+  return match?.[1] || 'docmind-chat-export.pdf';
 }
 
 export async function healthCheck() {
