@@ -9,6 +9,8 @@ services:
     healthCheckPath: /api/health
     autoDeployTrigger: commit
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL
