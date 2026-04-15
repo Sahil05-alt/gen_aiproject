@@ -1,6 +1,7 @@
+import json
 import uuid
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, File, UploadFile, HTTPException
 from pydantic import BaseModel
@@ -22,10 +23,58 @@ class DocumentStatus(BaseModel):
     status: str = "processing"  # "processing" | "indexed" | "error"
     total_chunks: int = 0
     total_pages: int = 0
-    error: str = None
+    error: Optional[str] = None
 
 
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt"}
+
+
+def _metadata_path(doc_id: str) -> Path:
+    return Path(settings.metadata_path) / f"{doc_id}.json"
+
+
+def _read_metadata(doc_id: str) -> Dict:
+    path = _metadata_path(doc_id)
+    if not path.exists():
+        return {}
+
+    try:
+        return json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return {}
+
+
+def _write_metadata(status: DocumentStatus, file_path: Optional[str] = None):
+    payload = status.model_dump()
+    existing = _read_metadata(status.doc_id)
+    payload["file_path"] = file_path or existing.get("file_path", "")
+    _metadata_path(status.doc_id).write_text(json.dumps(payload, indent=2))
+
+
+def _delete_metadata(doc_id: str):
+    path = _metadata_path(doc_id)
+    if path.exists():
+        path.unlink()
+
+
+def _load_registry_from_disk():
+    for path in Path(settings.metadata_path).glob("*.json"):
+        try:
+            payload = json.loads(path.read_text())
+            status = DocumentStatus(**payload)
+            _doc_registry[status.doc_id] = status
+        except (json.JSONDecodeError, TypeError, ValueError):
+            continue
+
+
+def _remove_uploaded_file(doc_id: str):
+    file_path = _read_metadata(doc_id).get("file_path")
+    if not file_path:
+        return
+
+    upload_path = Path(file_path)
+    if upload_path.exists():
+        upload_path.unlink()
 
 
 def _process_document(file_path: str, doc_id: str, doc_name: str):
@@ -35,9 +84,15 @@ def _process_document(file_path: str, doc_id: str, doc_name: str):
         _doc_registry[doc_id].status = "indexed"
         _doc_registry[doc_id].total_chunks = result["total_chunks"]
         _doc_registry[doc_id].total_pages = result["total_pages"]
+        _doc_registry[doc_id].error = None
+        _write_metadata(_doc_registry[doc_id], file_path=file_path)
     except Exception as e:
         _doc_registry[doc_id].status = "error"
         _doc_registry[doc_id].error = str(e)
+        _write_metadata(_doc_registry[doc_id], file_path=file_path)
+
+
+_load_registry_from_disk()
 
 
 @router.post("/api/documents/upload")
@@ -69,6 +124,7 @@ async def upload_document(
         doc_name=doc_name,
         status="processing"
     )
+    _write_metadata(_doc_registry[doc_id], file_path=str(save_path))
 
     # Start background processing
     if background_tasks:
@@ -101,6 +157,8 @@ async def delete_document_endpoint(doc_id: str):
 
     # Delete vector index
     delete_document(doc_id)
+    _remove_uploaded_file(doc_id)
+    _delete_metadata(doc_id)
 
     # Remove from registry
     del _doc_registry[doc_id]

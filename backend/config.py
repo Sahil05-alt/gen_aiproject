@@ -1,5 +1,8 @@
-from pydantic_settings import BaseSettings
+import json
 from pathlib import Path
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -11,6 +14,24 @@ class Settings(BaseSettings):
     top_k: int = 5
     vector_store_path: str = "./data/vectorstore"
     uploads_path: str = "./data/uploads"
+    metadata_path: str = "./data/metadata"
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:3000",
+    ]
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return []
+            if value.startswith("["):
+                return json.loads(value)
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
 
     class Config:
         env_file = ".env"
@@ -20,5 +41,5 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # Auto-create data directories
-Path(settings.vector_store_path).mkdir(parents=True, exist_ok=True)
-Path(settings.uploads_path).mkdir(parents=True, exist_ok=True)
+for path in (settings.vector_store_path, settings.uploads_path, settings.metadata_path):
+    Path(path).mkdir(parents=True, exist_ok=True)
