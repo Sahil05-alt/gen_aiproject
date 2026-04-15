@@ -331,9 +331,9 @@ For production, the recommended setup is:
 This repo now includes [render.yaml](/home/sahil05/Documents/docmind/render.yaml) for the FastAPI backend. It configures:
 
 - a Python web service rooted at `backend/`
+- the `free` Render instance type
 - `uvicorn main:app` as the start command
 - `/api/health` as the health check
-- a persistent disk mounted at `/var/data/docmind`
 - environment variables for uploads, vector indexes, metadata, and CORS
 
 To deploy the backend on Render:
@@ -346,9 +346,15 @@ To deploy the backend on Render:
 6. Deploy the service and wait for `/api/health` to pass.
 7. Copy the Render backend URL and set it as `VITE_API_BASE_URL` in Vercel, for example `https://your-service.onrender.com/api`.
 
-### Persistent metadata behavior
+### Free-tier storage behavior
 
-The backend now writes document metadata JSON to disk and reloads it on startup. That means uploaded document entries can survive normal service restarts as long as the persistent disk is still attached.
+The backend writes uploaded files, vector indexes, and document metadata to the local filesystem, but Render free web services do not provide persistent disks. That means:
+
+- uploads can disappear after redeploys, restarts, or service spin-down
+- FAISS indexes can disappear after redeploys, restarts, or service spin-down
+- persisted document metadata is only best-effort on the free tier
+
+This setup is fine for demos and testing, but not for stable long-term document storage.
 
 ## API Summary
 
@@ -411,12 +417,14 @@ This means:
 - restarting the backend clears chat history
 - restarting the backend reloads persisted document metadata from disk when available
 - uploaded files and vector indexes remain on disk unless deleted
+- on Render free tier, local disk contents may still be lost after restarts or spin-down
 
 ## Current Limitations
 
 - Chat memory is in memory, so sessions reset when the backend process restarts.
 - There is no authentication or multi-user isolation.
 - There is no database for document metadata; persistence is file-based.
+- Render free tier uses ephemeral local storage, so uploaded documents and vector indexes are not durable.
 - Confidence is heuristic and based only on retrieved chunk count, not model certainty.
 - The first embedding/model load can be slow on a fresh environment.
 

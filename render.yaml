@@ -3,6 +3,7 @@ services:
     name: docmind-api
     runtime: python
     rootDir: backend
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
@@ -21,14 +22,10 @@ services:
       - key: TOP_K
         value: "5"
       - key: VECTOR_STORE_PATH
-        value: /var/data/docmind/vectorstore
+        value: ./data/vectorstore
       - key: UPLOADS_PATH
-        value: /var/data/docmind/uploads
+        value: ./data/uploads
       - key: METADATA_PATH
-        value: /var/data/docmind/metadata
+        value: ./data/metadata
       - key: CORS_ORIGINS
         sync: false
-    disk:
-      name: docmind-data
-      mountPath: /var/data/docmind
-      sizeGB: 10
