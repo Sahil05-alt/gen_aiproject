@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     vector_store_path: str = "./data/vectorstore"
     uploads_path: str = "./data/uploads"
     metadata_path: str = "./data/metadata"
-    cors_origins: list[str] = [
+    cors_origins: list[str] | str = [
         "http://localhost:5173",
         "http://localhost:5174",
         "http://localhost:3000",

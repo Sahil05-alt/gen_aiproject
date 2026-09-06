@@ -14,3 +14,4 @@ torch
 pypdf==4.2.0
 docx2txt==0.8
 python-dotenv==1.0.1
+reportlab>=4.0.0

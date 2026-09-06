@@ -1,15 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from config import settings
 from routers import health, documents, chat
 
 app = FastAPI(title="DocMind API")
 
+cors_origins = settings.cors_origins if isinstance(settings.cors_origins, list) else [settings.cors_origins]
+allow_all = "*" in cors_origins
+
 # CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=not allow_all,
     allow_methods=["*"],
     allow_headers=["*"],
 )
